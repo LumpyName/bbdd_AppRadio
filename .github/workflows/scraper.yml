@@ -1,0 +1,65 @@
+name: Scraper Diario
+
+on:
+  schedule:
+    - cron: "0 12 * * *"   # todos los días a las 12 UTC
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Configurar Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      # -----------------------------
+      #      CACHE DE DEPENDENCIAS
+      # -----------------------------
+      - name: Cache pip
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      # -----------------------------
+      #      INSTALAR DEPENDENCIAS
+      # -----------------------------
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      # -----------------------------
+      #     EJECUTAR SCRAPER
+      # -----------------------------
+      - name: Ejecutar scraper
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SERVICE_ROLE: ${{ secrets.SERVICE_ROLE }}
+        run: python scraper.py
+
+      # ------------------------------------------
+      #           ENVIAR EMAIL SI FALLA
+      # ------------------------------------------
+      - name: Enviar correo de error
+        if: failure()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.EMAIL_USER }}
+          password: ${{ secrets.EMAIL_PASS }}  # contraseña de aplicación
+          subject: "Error en Scraper Diario"
+          to: ${{ secrets.EMAIL_TO }}
+          from: "Scraper Bot <${{ secrets.EMAIL_USER }}>"
+          body: |
+            El scraper falló.
+
+            Revisa los logs en:
+            ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
